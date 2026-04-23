@@ -1,85 +1,88 @@
-import streamlit as st
 import pickle
 import pandas as pd
 import numpy as np
-import os
+import streamlit as st
 
 # -------------------------------
-# Load files safely
+# Prediction Function
 # -------------------------------
-def load_file(path):
-    if not os.path.exists(path):
-        st.error(f" Missing file: {path}")
-        return None
-    with open(path, "rb") as f:
-        return pickle.load(f)
-
-# -------------------------------
-# Prediction function
-# -------------------------------
-def predict_co2(country, year, coal, oil, gas, renew):
-
-    scaler = load_file("models/scaler.pkl")
-    model = load_file("models/model.pkl")
-    encoder = load_file("models/encoder.pkl")
-
-    if scaler is None or model is None or encoder is None:
-        return None
-
+def predict_co2(country, year, coal, oil, gas, renewables, scaler_path, model_path, encoder_path):
     try:
-        country_enc = encoder.transform([country])[0]
-    except:
-        st.error(" Country not in training data")
-        return None
+        # Load scaler
+        with open(scaler_path, 'rb') as f1:
+            scaler = pickle.load(f1)
 
-    # IMPORTANT: Must match training features EXACTLY
-    data = pd.DataFrame({
-        "Country": [country_enc],
-        "Year": [year],
-        "coal_consumption": [coal],
-        "oil_consumption": [oil],
-        "gas_consumption": [gas],
-        "renewables_consumption": [renew]
-    })
+        # Load model
+        with open(model_path, 'rb') as f2:
+            model = pickle.load(f2)
 
-    try:
-        data_scaled = scaler.transform(data)
-        pred = model.predict(data_scaled)[0]
-        return pred
+        # Load encoder
+        with open(encoder_path, 'rb') as f3:
+            encoder = pickle.load(f3)
+
+        # Encode country
+        country_encoded = encoder.transform([country])[0]
+
+        # Create input dataframe
+        data = {
+            'Country': [country_encoded],
+            'Year': [year],
+            'coal_consumption': [coal],
+            'oil_consumption': [oil],
+            'gas_consumption': [gas],
+            'renewables_consumption': [renewables]
+        }
+
+        X_new = pd.DataFrame(data)
+
+        # Scale input
+        X_scaled = scaler.transform(X_new)
+
+        # Prediction
+        prediction = model.predict(X_scaled)[0]
+
+        return prediction
+
     except Exception as e:
-        st.error(f" Prediction error: {e}")
+        st.error(f"Error during prediction: {str(e)}")
         return None
 
 
 # -------------------------------
-# UI
+# Streamlit UI
 # -------------------------------
-st.title(" CO₂ Emission Predictor")
+st.set_page_config(page_title="CO2 Emission Predictor", layout="centered")
 
-# Check models folder
-if not os.path.exists("models"):
-    st.error("'models' folder not found. Run training code first.")
-else:
-    st.success(" Models loaded successfully")
+st.title("🌍 Global Energy CO₂ Predictor")
+
+st.markdown("Predict CO₂ emissions based on energy consumption")
 
 # Inputs
-country = st.selectbox("Country", ["India", "United States", "China", "UK"])
-year = st.number_input("Year", 1965, 2023, 2020)
+country = st.text_input("Country (example: India, USA, China)", "India")
+year = st.number_input("Year", min_value=1965, max_value=2023, value=2020)
 
-coal = st.number_input("Coal Consumption", 0.0)
-oil = st.number_input("Oil Consumption", 0.0)
-gas = st.number_input("Gas Consumption", 0.0)
-renew = st.number_input("Renewables Consumption", 0.0)
+coal = st.number_input("Coal Consumption", min_value=0.0, step=1.0)
+oil = st.number_input("Oil Consumption", min_value=0.0, step=1.0)
+gas = st.number_input("Gas Consumption", min_value=0.0, step=1.0)
+renewables = st.number_input("Renewables Consumption", min_value=0.0, step=1.0)
 
-# Predict
+# Button
 if st.button("Predict CO₂ Emission"):
-    scaler_path='/workspaces/Global-energy-debt-shock-/notebook/scaler.pkl'
-    model_path='/workspaces/Global-energy-debt-shock-/notebook/model.pkl'
 
-    result = predict_co2(country, year, coal, oil, gas, renew)
+    scaler_path = "/workspaces/Global-energy-debt-shock-/notebook/models/scaler.pkl"
+    model_path = "/workspaces/Global-energy-debt-shock-/notebook/models/model.pkl"
+    encoder_path = ""
+
+    result = predict_co2(
+        country, year, coal, oil, gas, renewables,
+        scaler_path, model_path, encoder_path
+    )
 
     if result is not None:
-        st.success(f" Predicted CO₂: {result:.2f} MtCO₂")
+        st.success(f"Predicted CO₂ Emission: {result:.2f} MtCO₂")
+
+        # Progress bar (normalized for UI)
         st.progress(min(result / 10000, 1.0))
+
     else:
-        st.error(" Prediction failed")
+        st.error("Prediction failed. Check model files or inputs.")
