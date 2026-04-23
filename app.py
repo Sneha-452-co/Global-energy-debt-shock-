@@ -3,86 +3,86 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
-# -------------------------------
+# -----------------------------
 # Prediction Function
-# -------------------------------
-def predict_co2(country, year, coal, oil, gas, renewables, scaler_path, model_path, encoder_path):
+# -----------------------------
+def predict_value(country, year, iso_alpha, iso_num, region, subregion,
+                  opec, eu, oecd, cis, var, scaler_path, model_path):
+
     try:
         # Load scaler
-        with open(scaler_path, 'rb') as f1:
+        with open('/workspaces/Global-energy-debt-shock-/notebook/models/scaler.pkl', 'rb') as f1:
             scaler = pickle.load(f1)
 
         # Load model
-        with open(model_path, 'rb') as f2:
+        with open('/workspaces/Global-energy-debt-shock-/notebook/models/model.pkl', 'rb') as f2:
             model = pickle.load(f2)
 
-        # Load encoder
-        with open(encoder_path, 'rb') as f3:
-            encoder = pickle.load(f3)
+        # Create input dataframe (MUST match training columns)
+        input_data = pd.DataFrame([{
+            'Country': country,
+            'Year': year,
+            'ISO3166_alpha3': iso_alpha,
+            'ISO3166_numeric': iso_num,
+            'Region': region,
+            'SubRegion': subregion,
+            'OPEC': opec,
+            'EU': eu,
+            'OECD': oecd,
+            'CIS': cis,
+            'Var': var
+        }])
 
-        # Encode country
-        country_encoded = encoder.transform([country])[0]
+        # ⚠️ IMPORTANT: Encoding (if used during training)
+        # Example:
+        # encoder = pickle.load(open("encoder.pkl", "rb"))
+        # input_data = encoder.transform(input_data)
 
-        # Create input dataframe
-        data = {
-            'Country': [country_encoded],
-            'Year': [year],
-            'coal_consumption': [coal],
-            'oil_consumption': [oil],
-            'gas_consumption': [gas],
-            'renewables_consumption': [renewables]
-        }
+        # Scale
+        input_scaled = scaler.transform(input_data)
 
-        X_new = pd.DataFrame(data)
+        # Predict
+        prediction = model.predict(input_scaled)
 
-        # Scale input
-        X_scaled = scaler.transform(X_new)
-
-        # Prediction
-        prediction = model.predict(X_scaled)[0]
-
-        return prediction
+        return prediction[0]
 
     except Exception as e:
-        st.error(f"Error during prediction: {str(e)}")
+        st.error(f"Error: {str(e)}")
         return None
 
 
-# -------------------------------
+# -----------------------------
 # Streamlit UI
-# -------------------------------
-st.set_page_config(page_title="CO2 Emission Predictor", layout="centered")
+# -----------------------------
+st.title("🌍 Energy / CO2 Predictor")
 
-st.title("🌍 Global Energy CO₂ Predictor")
+country = st.text_input("Country")
+year = st.number_input("Year", 1900, 2100, 2020)
 
-st.markdown("Predict CO₂ emissions based on energy consumption")
+iso_alpha = st.text_input("ISO Alpha Code (e.g., IND)")
+iso_num = st.number_input("ISO Numeric Code", 0)
 
-# Inputs
-country = st.text_input("Country (example: India, USA, China)", "India")
-year = st.number_input("Year", min_value=1965, max_value=2023, value=2020)
+region = st.text_input("Region")
+subregion = st.text_input("SubRegion")
 
-coal = st.number_input("Coal Consumption", min_value=0.0, step=1.0)
-oil = st.number_input("Oil Consumption", min_value=0.0, step=1.0)
-gas = st.number_input("Gas Consumption", min_value=0.0, step=1.0)
-renewables = st.number_input("Renewables Consumption", min_value=0.0, step=1.0)
+opec = st.selectbox("OPEC", [0, 1])
+eu = st.selectbox("EU", [0, 1])
+oecd = st.selectbox("OECD", [0, 1])
+cis = st.selectbox("CIS", [0, 1])
 
-# Button
-if st.button("Predict CO₂ Emission"):
+var = st.text_input("Variable (e.g., Oil, Gas, Coal)")
 
-    scaler_path = "/workspaces/Global-energy-debt-shock-/notebook/models/scaler.pkl"
-    model_path = "/workspaces/Global-energy-debt-shock-/notebook/models/model.pkl"
-    encoder_path = ""
+if st.button("Predict"):
+    scaler_path = "notebook/scaler.pkl"
+    model_path = "notebook/model.pkl"
 
-    result = predict_co2(
-        country, year, coal, oil, gas, renewables,
-        scaler_path, model_path, encoder_path
+    result = predict_value(
+        country, year, iso_alpha, iso_num,
+        region, subregion, opec, eu, oecd, cis, var,
+        scaler_path, model_path
     )
 
     if result is not None:
-        st.success(f"Predicted CO₂ Emission: {result:.2f} MtCO₂")
-
-        # Progress bar (normalized for UI)
-        st.progress(min(result / 10000, 1.0))
-
+        st.success(f"Predicted Value: {result}")
     else:
-        st.error("Prediction failed. Check model files or inputs.")
+        st.error("Prediction failed")
